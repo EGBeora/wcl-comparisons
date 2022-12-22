@@ -173,5 +173,5 @@ def run_comparison(player_name=None, player_time=None, compare_to_name=None, com
     else:
         return compare_players(clean_player, clean_compare_to)
 
-## Example
+# Example
 # run_comparison(player_name='Longshot', player_time=134, compare_to_name='Perplexity', compare_to_time=119, normalize=True)
