@@ -51,7 +51,10 @@ def clean_df(player, kill_time=None):
             df['dps'][i] = float(df['dps'][i])
         
         if '(' in str(df['hits'][i]):
-            df['hits'][i] = int(str(df['hits'][i]).split('(')[1].split(')')[0])
+            if df['name'][i] == 'Corruption':
+                df['hits'][i] = int(str(df['hits'][i]).split('(')[0])
+            else:
+                df['hits'][i] = int(str(df['hits'][i]).split('(')[1].split(')')[0])
 
 
     df.drop_duplicates(subset=['amount'], keep='first', inplace=True)
@@ -105,7 +108,7 @@ def normalize_players(player=None, compare_to=None):
 
     join_df = compare_to[['name', 'avg_hit']]
 
-    player = pd.merge(left=player, right=join_df, how='inner', on='name')
+    player = pd.merge(left=player, right=join_df, how='outer', on='name')
 
     player['avg_hit_x'] = player['avg_hit_y']
     player = player.rename(columns={'avg_hit_x':'avg_hit'})
@@ -157,8 +160,8 @@ def compare_players(player=None, compare_to=None):
 # Full comparison function
 def run_comparison(player_name=None, player_time=None, compare_to_name=None, compare_to_time=None, normalize=False):
 
-    player = pd.read_csv(f'{player_name}.csv')
-    compare_to = pd.read_csv(f'{compare_to_name}.csv')
+    player = pd.read_csv(f'CSVs\\{player_name}.csv')
+    compare_to = pd.read_csv(f'CSVs\\{compare_to_name}.csv')
 
     clean_player = clean_df(player, player_time)
     clean_compare_to = clean_df(compare_to, compare_to_time)
@@ -169,9 +172,33 @@ def run_comparison(player_name=None, player_time=None, compare_to_name=None, com
     print(f'{compare_to_name} DPS: ' + str(clean_compare_to['dps'].sum()))
 
     if normalize:
-        return compare_players(norm_player, clean_compare_to)
+        df =  compare_players(norm_player, clean_compare_to)
     else:
-        return compare_players(clean_player, clean_compare_to)
+        df =  compare_players(clean_player, clean_compare_to)
+    
+    return df
+
+def style(df):
+    def color_negative_red(value):
+        """
+        Colors elements in a dateframe
+        green if positive and red if
+        negative. Does not color NaN
+        values.
+        """
+
+        if value < 0:
+            color = 'orangered'
+        elif value > 0:
+            color = 'limegreen'
+        else:
+            color = 'grey'
+
+        return 'color: %s' % color
+
+    subset = ['casts', 'hits', 'uptime_perc', 'dps']
+
+    return df.style.applymap(color_negative_red, subset=subset)
 
 # Example
 # run_comparison(player_name='Longshot', player_time=134, compare_to_name='Perplexity', compare_to_time=119, normalize=True)
