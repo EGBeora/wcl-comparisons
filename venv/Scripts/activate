@@ -1,5 +1,5 @@
 # This file must be used with "source bin/activate" *from bash*
-## you cannot run it directly
+# you cannot run it directly
 
 deactivate () {
     # reset old environment variables
@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="C:\Users\Michael Skriloff\Desktop\Personal\venv"
+VIRTUAL_ENV="C:\Users\mskriloff-local\wcl-comparisons\venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
