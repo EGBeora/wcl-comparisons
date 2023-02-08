@@ -1,6 +1,168 @@
-import pandas as pd
+import os  
+import time
 import numpy as np
+import pandas as pd
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import StaleElementReferenceException
+from dictionaries import *
+
 pd.options.mode.chained_assignment = None
+
+options = Options()
+
+prefs = {
+    "download.default_directory" : "C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs"
+    }
+
+options.add_experimental_option("prefs", prefs)
+options.add_argument("--headless")
+
+# Downloads the top parse for a player on a specified boss and saves it as playerName.csv
+def download_csv(player=None, boss=None):
+
+    print('Establishing driver . . .')
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    print(f'Navigating to {player.capitalize()}\'s WCL Page . . .')
+    driver.get(f'https://classic.warcraftlogs.com/character/us/skyfury/{player.lower()}')
+
+    WebDriverWait(driver, 35).until(EC.presence_of_element_located((By.LINK_TEXT, boss)))
+    boss = driver.find_element(By.LINK_TEXT, boss)
+
+    driver.execute_script("return arguments[0].scrollIntoView(true);", boss)
+    driver.execute_script("window.scrollBy(0, -100);")
+    
+    print('Selecting boss . . .')
+    boss.click()
+
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CLASS_NAME, 'character-table-link')))
+    reports = driver.find_elements(By.CLASS_NAME, 'character-table-link')
+
+    report_list = []
+    for i in range(len(reports)):
+        report_list.append(reports[i].text)
+
+    parses = pd.DataFrame({
+        'parse':report_list[0::6],
+        'kill_time': report_list[3::6]
+    })
+
+    parses = parses.sort_values('parse', ascending=False).reset_index(drop=True)
+    parse = parses['parse'][0]
+    kill_time = parses['kill_time'][0]
+
+    min, sec = str(kill_time).split(':')
+    kill_time = int(min)*60 + int(sec)
+
+    print('Finding top parse . . .')
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, report_list[0])))
+    top_parse_report = driver.find_element(By.LINK_TEXT, str(parse))
+    top_parse_report.click()
+
+
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, player.capitalize())))
+    top_parse = driver.find_element(By.LINK_TEXT, player.capitalize())
+    driver.execute_script("return arguments[0].scrollIntoView(true);", top_parse)
+    driver.execute_script("window.scrollBy(0, -100);")
+    top_parse.click()
+
+    print('Downloading CSV . . .')
+    ignored_exceptions=(NoSuchElementException,StaleElementReferenceException,)
+    time.sleep(5)
+    driver.find_elements(By.XPATH, '//button[normalize-space()="CSV"]')[0].click()
+
+    time.sleep(3)
+    print('Renaming CSV . . .')
+
+    try:
+        os.remove(f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+    except:
+        pass
+    os.rename('C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
+    f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+
+    print('Adding kill time . . .')
+    csv = pd.read_csv(f'CSVs\\{player}.csv')
+    csv['kill_time'] = kill_time
+    csv.to_csv(f'CSVs\\{player}.csv')
+    driver.quit()
+
+# Looks through top players of a particular class/spec and tries to find one who's kill time matches within tolerance to the target
+def find_top_match(server=None, player_class=None, player_spec=None, boss=None, target_time=None, kill_time_tolerance=None):
+
+    print('Establishing driver . . .')
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    if server.lower() == 'all':
+        server = 'zone/rankings/1017'
+    else:
+        server = 'server/rankings/5192/1017'
+    driver.get(f'https://classic.warcraftlogs.com/{server}#metric=dps&partition=2&class={player_class.capitalize()}&spec={player_spec.capitalize()}&boss={boss_ids[boss]}')
+
+    print(f'Navigating to top {player_spec.capitalize()} {player_class.capitalize()}s . . .')
+    top_players = driver.find_elements(By.CLASS_NAME, 'main-table-player')
+    top_players_times = driver.find_elements(By.CLASS_NAME, 'players-table-duration')
+    
+    top_players_list = []
+    top_players_time_list = []
+    for i in range(len(top_players)):
+        top_players_list.append(top_players[i].text)
+        top_players_time_list.append(top_players_times[i].get_attribute("innerText").split('\n')[0])
+    
+    df = pd.DataFrame({
+        'player':top_players_list,
+        'kill_time':top_players_time_list
+    })
+
+    for i in range(len(df)):
+
+        min, sec = str(df['kill_time'][i]).split(':')
+        kill_time = int(min) * 60 + int(sec)
+
+        if (target_time - kill_time_tolerance) < kill_time < (target_time + kill_time_tolerance):
+            
+            player= df['player'][i]
+
+    for i in range(2):
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, player.capitalize())))
+        top_parse = driver.find_element(By.LINK_TEXT, player.capitalize())
+        driver.execute_script("return arguments[0].scrollIntoView(true);", top_parse)
+        driver.execute_script("window.scrollBy(0, -100);")
+        top_parse.click()
+
+    print('Downloading CSV . . .')
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//button[normalize-space()="CSV"]')))
+    csv_button = driver.find_elements(By.XPATH, '//button[normalize-space()="CSV"]')[0]
+    driver.execute_script("return arguments[0].scrollIntoView(true);", csv_button)
+    driver.execute_script("window.scrollBy(0, -100);")
+    csv_button.click()
+
+    time.sleep(3)
+    print('Renaming CSV . . .')
+
+    try:
+        os.remove(f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+    except:
+        pass
+    os.rename('C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
+    f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+
+    print('Adding kill time . . .')
+    csv = pd.read_csv(f'CSVs\\{player}.csv')
+    csv['kill_time'] = kill_time
+    csv.to_csv(f'CSVs\\{player}.csv')
+    driver.quit()
+    
+    return player
 
 # Cleans a WarcraftLogs dataframe, turning outputs like 1.1k into 1100, etc. so that it is able to be manipulated via python
 def clean_df(player, kill_time=None):
@@ -157,27 +319,7 @@ def compare_players(player=None, compare_to=None):
 
     return df[cols]
 
-# Full comparison function
-def run_comparison(player_name=None, player_time=None, compare_to_name=None, compare_to_time=None, normalize=False):
-
-    player = pd.read_csv(f'CSVs\\{player_name}.csv')
-    compare_to = pd.read_csv(f'CSVs\\{compare_to_name}.csv')
-
-    clean_player = clean_df(player, player_time)
-    clean_compare_to = clean_df(compare_to, compare_to_time)
-
-    norm_player = normalize_players(clean_player, clean_compare_to)
-    print(f'{player_name} DPS: ' + str(clean_player['dps'].sum()))
-    print(f'{player_name} Normalized DPS: ' + str(norm_player['dps'].sum()))
-    print(f'{compare_to_name} DPS: ' + str(clean_compare_to['dps'].sum()))
-
-    if normalize:
-        df =  compare_players(norm_player, clean_compare_to)
-    else:
-        df =  compare_players(clean_player, clean_compare_to)
-    
-    return df
-
+# Styles DF with red/green theme so you can easily see +/- values
 def style(df):
     def color_negative_red(value):
         """
@@ -199,6 +341,37 @@ def style(df):
     subset = ['casts', 'hits', 'uptime_perc', 'dps']
 
     return df.style.applymap(color_negative_red, subset=subset)
+
+# Full comparison function
+def run_comparison(server=None, player_class=None, player_spec=None, player_name=None, compare_to_name=None, boss=None, kill_time_tolerance=None, normalize=False):
+
+    download_csv(player=player_name, boss=boss)
+    player = pd.read_csv(f'CSVs\\{player_name}.csv')
+
+    if compare_to_name is None:
+        compare_to_name = find_top_match(server=server, player_class=player_class, player_spec=player_spec, boss=boss, target_time=player['kill_time'][0], kill_time_tolerance=kill_time_tolerance)
+    else:
+        download_csv(player=compare_to_name, boss=boss)
+    compare_to = pd.read_csv(f'CSVs\\{compare_to_name}.csv')
+
+    os.remove(f'CSVs\\{player_name}.csv')
+    os.remove(f'CSVs\\{compare_to_name}.csv')
+
+    clean_player = clean_df(player, player['kill_time'][0])
+    clean_compare_to = clean_df(compare_to, compare_to['kill_time'][0])
+
+    norm_player = normalize_players(clean_player, clean_compare_to)
+    print(f'{player_name} DPS: ' + str(clean_player['dps'].sum()))
+    print(f'{player_name} Normalized DPS: ' + str(norm_player['dps'].sum()))
+    print(f'{compare_to_name} DPS: ' + str(clean_compare_to['dps'].sum()))
+
+    if normalize:
+        df =  compare_players(norm_player, clean_compare_to)
+    else:
+        df =  compare_players(clean_player, clean_compare_to)
+    
+    return style(df)
+
 
 # Example
 # run_comparison(player_name='Longshot', player_time=134, compare_to_name='Perplexity', compare_to_time=119, normalize=True)
