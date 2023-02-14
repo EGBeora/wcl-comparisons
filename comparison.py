@@ -20,7 +20,7 @@ pd.options.mode.chained_assignment = None
 options = Options()
 
 prefs = {
-    "download.default_directory" : "C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs"
+    "download.default_directory" : os.getcwd() + "\\CSVs"
     }
 
 options.add_experimental_option("prefs", prefs)
@@ -51,21 +51,24 @@ def download_csv(player=None, boss=None):
     for i in range(len(reports)):
         report_list.append(reports[i].text)
 
-    parses = pd.DataFrame({
-        'parse':report_list[0::6],
-        'kill_time': report_list[3::6]
-    })
+    # parses = pd.DataFrame({
+    #     'parse':report_list[0::6],
+    #     'kill_time': report_list[3::6]
+    # })
 
-    parses = parses.sort_values('parse', ascending=False).reset_index(drop=True)
-    parse = parses['parse'][0]
-    kill_time = parses['kill_time'][0]
+    # parses = parses.sort_values('parse', ascending=False).reset_index(drop=True)
+    # parse = parses['parse'][0]
+
+    kill_time = report_list[3]
 
     min, sec = str(kill_time).split(':')
     kill_time = int(min)*60 + int(sec)
 
     print('Finding top parse . . .')
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, report_list[0])))
-    top_parse_report = driver.find_element(By.LINK_TEXT, str(parse))
+    top_parse_report = driver.find_elements(By.LINK_TEXT, str(report_list[0]))[0]
+    driver.execute_script("return arguments[0].scrollIntoView(true);", top_parse_report)
+    driver.execute_script("window.scrollBy(0, -200);")
     top_parse_report.click()
 
 
@@ -78,17 +81,20 @@ def download_csv(player=None, boss=None):
     print('Downloading CSV . . .')
     ignored_exceptions=(NoSuchElementException,StaleElementReferenceException,)
     time.sleep(5)
-    driver.find_elements(By.XPATH, '//button[normalize-space()="CSV"]')[0].click()
+    csv_button = driver.find_elements(By.XPATH, '//button[normalize-space()="CSV"]')[0]
+    driver.execute_script("return arguments[0].scrollIntoView(true);", csv_button)
+    driver.execute_script("window.scrollBy(0, -100);")
+    csv_button.click()
 
     time.sleep(3)
     print('Renaming CSV . . .')
 
     try:
-        os.remove(f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+        os.remove(os.getcwd() + f'\\CSVs\\{player.lower()}.csv')
     except:
         pass
-    os.rename('C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
-    f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+    os.rename(os.getcwd() + f'\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
+    os.getcwd() + f'\\CSVs\\{player.lower()}.csv')
 
     print('Adding kill time . . .')
     csv = pd.read_csv(f'CSVs\\{player}.csv')
@@ -106,9 +112,14 @@ def find_top_match(server=None, player_class=None, player_spec=None, boss=None, 
         server = 'zone/rankings/1017'
     else:
         server = 'server/rankings/5192/1017'
-    driver.get(f'https://classic.warcraftlogs.com/{server}#metric=dps&partition=2&class={player_class.capitalize()}&spec={player_spec.capitalize()}&boss={boss_ids[boss]}')
+    
+    p_class = str(player_class.title()).replace(' ','')
+    p_spec = str(player_spec.title()).replace(' ','')
 
-    print(f'Navigating to top {player_spec.capitalize()} {player_class.capitalize()}s . . .')
+    print(f'https://classic.warcraftlogs.com/{server}#metric=dps&partition=2&class={p_class}&spec={p_spec}&boss={boss_ids[boss]}')
+    driver.get(f'https://classic.warcraftlogs.com/{server}#metric=dps&partition=2&class={p_class}&spec={p_spec}&boss={boss_ids[boss]}')
+
+    print(f'Navigating to top {player_spec.title()} {player_class.title()}s . . .')
     top_players = driver.find_elements(By.CLASS_NAME, 'main-table-player')
     top_players_times = driver.find_elements(By.CLASS_NAME, 'players-table-duration')
     
@@ -123,14 +134,20 @@ def find_top_match(server=None, player_class=None, player_spec=None, boss=None, 
         'kill_time':top_players_time_list
     })
 
+    print(target_time)
+    found_match = False
     for i in range(len(df)):
 
         min, sec = str(df['kill_time'][i]).split(':')
         kill_time = int(min) * 60 + int(sec)
 
         if (target_time - kill_time_tolerance) < kill_time < (target_time + kill_time_tolerance):
-            
+            found_match = True
             player= df['player'][i]
+    
+    if found_match is False:
+        print('Could not find a match within the specified tolerance')
+        return
 
     for i in range(2):
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.LINK_TEXT, player.capitalize())))
@@ -139,6 +156,7 @@ def find_top_match(server=None, player_class=None, player_spec=None, boss=None, 
         driver.execute_script("window.scrollBy(0, -100);")
         top_parse.click()
 
+    time.sleep(3)
     print('Downloading CSV . . .')
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.XPATH, '//button[normalize-space()="CSV"]')))
     csv_button = driver.find_elements(By.XPATH, '//button[normalize-space()="CSV"]')[0]
@@ -150,11 +168,11 @@ def find_top_match(server=None, player_class=None, player_spec=None, boss=None, 
     print('Renaming CSV . . .')
 
     try:
-        os.remove(f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+        os.remove(os.getcwd() + f'\\CSVs\\{player.lower()}.csv')
     except:
         pass
-    os.rename('C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
-    f'C:\\Users\\mskriloff-local\\wcl-comparisons\\CSVs\\{player.lower()}.csv')
+    os.rename(os.getcwd() + f'\\CSVs\\Warcraft Logs - Combat Analysis for Warcraft.csv',
+    os.getcwd() + f'\\CSVs\\{player.lower()}.csv')
 
     print('Adding kill time . . .')
     csv = pd.read_csv(f'CSVs\\{player}.csv')
